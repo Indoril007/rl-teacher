@@ -309,7 +309,7 @@ def main():
             workers=args.workers,
             runtime=(num_timesteps / 1000),
             max_timesteps_per_episode=get_timesteps_per_episode(env),
-            timesteps_per_batch=8000,
+            timesteps_per_batch=20000,
             max_kl=0.001,
             seed=args.seed,
         )
