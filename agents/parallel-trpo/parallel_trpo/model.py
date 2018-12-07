@@ -1,4 +1,5 @@
 import multiprocessing
+import os
 from collections import OrderedDict
 from time import clock as time
 
@@ -172,3 +173,10 @@ class TRPO(object):
         stats["Frames gathered"] = sum([len(path["rewards"]) for path in paths])
 
         return stats, time() - start_time
+
+    def save_session(self, path, global_step):
+        tf.train.Saver().save(self.session, path, global_step)
+
+    def load_session(self, path):
+        tf.train.Saver().restore(self.session, tf.train.latest_checkpoint(path))
+

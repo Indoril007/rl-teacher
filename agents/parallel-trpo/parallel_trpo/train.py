@@ -38,6 +38,9 @@ def train_parallel_trpo(
         seed=0,
         discount_factor=0.995,
         cg_damping=0.1,
+        save_freq=100,
+        save_dir=None,
+        load_dir=None,
 ):
     # Tensorflow is not fork-safe, so we must use spawn instead
     # https://github.com/tensorflow/tensorflow/issues/5448#issuecomment-258934405
@@ -57,6 +60,16 @@ def train_parallel_trpo(
         discount_factor=discount_factor,
         cg_damping=cg_damping)
 
+    if load_dir is not None:
+
+        print("Loading Learner...")
+        fpath = os.path.join(load_dir, 'learner')
+        learner.load_session(fpath)
+        with open(os.path.join(fpath,'loaded_weights.txt'), 'w+') as f:
+            f.write(str(learner.get_policy()))
+
+        print("Loading Predictor...")
+
     rollouts = ParallelRollout(env_id, make_env, predictor, workers, max_timesteps_per_episode, seed)
 
     iteration = 0
@@ -74,6 +87,15 @@ def train_parallel_trpo(
 
         # learn from that data
         stats, learn_time = learner.learn(paths)
+
+        if iteration % save_freq == 0:
+            # Saving learner
+            fpath = os.path.join(save_dir, 'learner/sess')
+            learner.save_session(fpath, global_step=iteration)
+            with open(fpath + '_saved_weights_{}.txt'.format(iteration), 'w+') as f:
+                f.write(str(learner.get_policy()))
+
+            # Saving predictor
 
         # output stats
         print("-------- Iteration %d ----------" % iteration)

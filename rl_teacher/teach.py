@@ -222,6 +222,7 @@ def main():
     parser.add_argument('-a', '--agent', default="parallel_trpo", type=str)
     parser.add_argument('-i', '--pretrain_iters', default=10000, type=int)
     parser.add_argument('-V', '--no_videos', action="store_true")
+    parser.add_argument('-d', '--load_dir', default=None, type=str)
     args = parser.parse_args()
 
     print("Setting things up...")
@@ -297,6 +298,12 @@ def main():
     if not args.no_videos:
         predictor = SegmentVideoRecorder(predictor, env, save_dir=osp.join('/tmp/rl_teacher_vids', run_name))
 
+    save_dir = './experiments/{}'.format(time())
+    if osp.exists(save_dir):
+        print("Warning: Log dir %s already exists! Storing info there anyway." % self.output_dir)
+    else:
+        os.makedirs(save_dir)
+
     # We use a vanilla agent from openai/baselines that contains a single change that blinds it to the true reward
     # The single changed section is in `rl_teacher/agent/trpo/core.py`
     print("Starting joint training of predictor and agent")
@@ -309,9 +316,12 @@ def main():
             workers=args.workers,
             runtime=(num_timesteps / 1000),
             max_timesteps_per_episode=get_timesteps_per_episode(env),
-            timesteps_per_batch=20000,
+            timesteps_per_batch=1000,
             max_kl=0.001,
             seed=args.seed,
+            save_freq=2,
+            save_dir=save_dir,
+            load_dir=args.load_dir,
         )
     elif args.agent == "pposgd_mpi":
         def make_env():
