@@ -70,3 +70,18 @@ class AgentLogger(object):
         add_simple_summary(self.summary_writer, tag, simple_value, self.summary_step)
         if debug:
             print("%s    =>    %s" % (tag, simple_value))
+
+    def get_state(self):
+        state = [self.summary_step,
+                 self.timesteps_per_summary,
+                 self._timesteps_elapsed,
+                 self._timesteps_since_last_training,
+                 self.last_n_paths]
+        return state
+
+    def load_state(self, state):
+        self.summary_step,  \
+        self.timesteps_per_summary, \
+        self._timesteps_elapsed,    \
+        self._timesteps_since_last_training,    \
+        self.last_n_paths = state

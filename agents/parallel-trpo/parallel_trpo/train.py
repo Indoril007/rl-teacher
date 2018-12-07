@@ -61,7 +61,10 @@ def train_parallel_trpo(
         discount_factor=discount_factor,
         cg_damping=cg_damping)
 
-    predictor.sess.run(tf.initializers.variables(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='policy')))
+    if predictor.sess:
+        predictor.sess.run(tf.initializers.variables(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='policy')))
+
+    iteration = 0
 
     if load_dir is not None:
 
@@ -73,11 +76,11 @@ def train_parallel_trpo(
 
         print("Loading Predictor...")
         fpath = os.path.join(load_dir, 'predictor')
-        learner.load_session(fpath)
+        iteration = predictor.load_session(fpath)
+
 
     rollouts = ParallelRollout(env_id, make_env, predictor, workers, max_timesteps_per_episode, seed)
 
-    iteration = 0
     start_time = time()
 
     while run_indefinitely or time() < start_time + runtime:
@@ -95,13 +98,13 @@ def train_parallel_trpo(
 
         if iteration % save_freq == 0:
             # Saving learner
-            fpath = os.path.join(save_dir, 'learner/sess')
+            fpath = os.path.join(save_dir, 'learner')
             learner.save_session(fpath, global_step=iteration)
             with open(fpath + '_saved_weights_{}.txt'.format(iteration), 'w+') as f:
                 f.write(str(learner.get_policy()))
 
             # Saving predictor
-            fpath = os.path.join(save_dir, 'predictor/sess')
+            fpath = os.path.join(save_dir, 'predictor')
             predictor.save_session(fpath, global_step=iteration)
 
         # output stats
@@ -115,6 +118,9 @@ def train_parallel_trpo(
 
         total_elapsed_seconds = time() - start_time
         stats["Total time"] = total_elapsed_seconds
+
+        if predictor.comparison_collector:
+            stats["Collected Comparisons"] = len(predictor.comparison_collector)
 
         print_stats(stats)
 
