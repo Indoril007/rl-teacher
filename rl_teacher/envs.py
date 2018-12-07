@@ -2,7 +2,8 @@ from copy import copy
 
 import gym
 import numpy as np
-from gym.envs import mujoco
+#from gym.envs import mujoco
+import pybullet_envs
 from gym.wrappers.time_limit import TimeLimit
 
 class TransparentWrapper(gym.Wrapper):
@@ -91,6 +92,8 @@ def task_by_name(name, short=False):
         return swimmer()
     elif name == "ant":
         return ant()
+    elif name == "bullet_ant":
+        return bullet_ant()
     elif name in ["cheetah", "halfcheetah"]:
         return cheetah(short=short)
     elif name in ["pendulum"]:
@@ -127,77 +130,82 @@ class SimpleReacher(mujoco.ReacherEnv):
         ob, _, done, info = super()._step(a)
         return ob, info["reward_dist"], done, info
 
-def reacher(short=False):
-    env = mujoco.ReacherEnv()
-    env = UseReward(env, reward_info_key="reward_dist")
-    env = MjViewer(fps=10, env=env)
-    return limit(t=20 if short else 50, env=env)
+# def reacher(short=False):
+#     env = mujoco.ReacherEnv()
+#     env = UseReward(env, reward_info_key="reward_dist")
+#     env = MjViewer(fps=10, env=env)
+#     return limit(t=20 if short else 50, env=env)
+# 
+# def hopper(short=False):
+#     bonus = lambda a, data: (data.qpos[1, 0] - 1) + 1e-3 * np.square(a).sum()
+#     env = mujoco.HopperEnv()
+#     env = MjViewer(fps=40, env=env)
+#     env = NeverDone(bonus=bonus, env=env)
+#     env = limit(t=300 if short else 1000, env=env)
+#     return env
+# 
+# def humanoid(standup=True, short=False):
+#     env = mujoco.HumanoidEnv()
+#     env = MjViewer(env, fps=40)
+#     env = UseReward(env, reward_info_key="reward_linvel")
+#     if standup:
+#         bonus = lambda a, data: 5 * (data.qpos[2, 0] - 1)
+#         env = NeverDone(env, bonus=bonus)
+#     return limit(env, 300 if short else 1000)
+# 
+# def double_pendulum():
+#     bonus = lambda a, data: 10 * (data.site_xpos[0][2] - 1)
+#     env = mujoco.InvertedDoublePendulumEnv()
+#     env = MjViewer(env, fps=10)
+#     env = NeverDone(env, bonus)
+#     env = limit(env, 50)
+#     return env
+# 
+# def pendulum():
+#     # bonus = lambda a, data: np.concatenate([data.qpos, data.qvel]).ravel()[1] - 1.2
+#     def bonus(a, data):
+#         angle = data.qpos[1, 0]
+#         return -np.square(angle)  # Remove the square of the angle
+# 
+#     env = mujoco.InvertedPendulumEnv()
+#     env = MjViewer(env, fps=10)
+#     env = NeverDone(env, bonus)
+#     env = limit(env, 25)  # Balance for 2.5 seconds
+#     return env
+# 
+# def cheetah(short=False):
+#     env = mujoco.HalfCheetahEnv()
+#     env = UseReward(env, reward_info_key="reward_run")
+#     env = MjViewer(env, fps=20)
+#     env = limit(env, 300 if short else 1000)
+#     return env
+# 
+# def swimmer(short=False):
+#     env = mujoco.SwimmerEnv()
+#     env = UseReward(env, reward_info_key="reward_fwd")
+#     env = MjViewer(env, fps=40)
+#     env = limit(env, 300 if short else 1000)
+#     return env
+# 
+# def ant(standup=True, short=False):
+#     env = mujoco.AntEnv()
+#     env = UseReward(env, reward_info_key="reward_forward")
+#     env = MjViewer(env, fps=20)
+#     if standup:
+#         bonus = lambda a, data: data.qpos.flat[2] - 1.2
+#         env = NeverDone(env, bonus)
+#     env = limit(env, 300 if short else 1000)
+#     return env
 
-def hopper(short=False):
-    bonus = lambda a, data: (data.qpos[1, 0] - 1) + 1e-3 * np.square(a).sum()
-    env = mujoco.HopperEnv()
-    env = MjViewer(fps=40, env=env)
-    env = NeverDone(bonus=bonus, env=env)
-    env = limit(t=300 if short else 1000, env=env)
+def bullet_ant():
+    env = gym.make('AntBulletEnv-v0')
+    env.fps = env.metadata['video.frames_per_second']
     return env
 
-def humanoid(standup=True, short=False):
-    env = mujoco.HumanoidEnv()
-    env = MjViewer(env, fps=40)
-    env = UseReward(env, reward_info_key="reward_linvel")
-    if standup:
-        bonus = lambda a, data: 5 * (data.qpos[2, 0] - 1)
-        env = NeverDone(env, bonus=bonus)
-    return limit(env, 300 if short else 1000)
-
-def double_pendulum():
-    bonus = lambda a, data: 10 * (data.site_xpos[0][2] - 1)
-    env = mujoco.InvertedDoublePendulumEnv()
-    env = MjViewer(env, fps=10)
-    env = NeverDone(env, bonus)
-    env = limit(env, 50)
-    return env
-
-def pendulum():
-    # bonus = lambda a, data: np.concatenate([data.qpos, data.qvel]).ravel()[1] - 1.2
-    def bonus(a, data):
-        angle = data.qpos[1, 0]
-        return -np.square(angle)  # Remove the square of the angle
-
-    env = mujoco.InvertedPendulumEnv()
-    env = MjViewer(env, fps=10)
-    env = NeverDone(env, bonus)
-    env = limit(env, 25)  # Balance for 2.5 seconds
-    return env
-
-def cheetah(short=False):
-    env = mujoco.HalfCheetahEnv()
-    env = UseReward(env, reward_info_key="reward_run")
-    env = MjViewer(env, fps=20)
-    env = limit(env, 300 if short else 1000)
-    return env
-
-def swimmer(short=False):
-    env = mujoco.SwimmerEnv()
-    env = UseReward(env, reward_info_key="reward_fwd")
-    env = MjViewer(env, fps=40)
-    env = limit(env, 300 if short else 1000)
-    return env
-
-def ant(standup=True, short=False):
-    env = mujoco.AntEnv()
-    env = UseReward(env, reward_info_key="reward_forward")
-    env = MjViewer(env, fps=20)
-    if standup:
-        bonus = lambda a, data: data.qpos.flat[2] - 1.2
-        env = NeverDone(env, bonus)
-    env = limit(env, 300 if short else 1000)
-    return env
-
-def walker(short=False):
-    bonus = lambda a, data: data.qpos[1, 0] - 2.0 + 1e-3 * np.square(a).sum()
-    env = mujoco.Walker2dEnv()
-    env = MjViewer(env, fps=30)
-    env = NeverDone(env, bonus)
-    env = limit(env, 300 if short else 1000)
-    return env
+# def walker(short=False):
+#     bonus = lambda a, data: data.qpos[1, 0] - 2.0 + 1e-3 * np.square(a).sum()
+#     env = mujoco.Walker2dEnv()
+#     env = MjViewer(env, fps=30)
+#     env = NeverDone(env, bonus)
+#     env = limit(env, 300 if short else 1000)
+#     return env
