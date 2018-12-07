@@ -8,7 +8,7 @@ import numpy as np
 import tensorflow as tf
 from keras import backend as K
 from parallel_trpo.train import train_parallel_trpo
-from pposgd_mpi.run_mujoco import train_pposgd_mpi
+#from pposgd_mpi.run_mujoco import train_pposgd_mpi
 
 from rl_teacher.comparison_collectors import SyntheticComparisonCollector, HumanComparisonCollector
 from rl_teacher.envs import get_timesteps_per_episode

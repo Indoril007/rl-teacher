@@ -122,14 +122,14 @@ def get_timesteps_per_episode(env):
         return get_timesteps_per_episode(env.env)
     return None
 
-def simple_reacher():
-    return limit(SimpleReacher(), 50)
-
-class SimpleReacher(mujoco.ReacherEnv):
-    def _step(self, a):
-        ob, _, done, info = super()._step(a)
-        return ob, info["reward_dist"], done, info
-
+# def simple_reacher():
+#     return limit(SimpleReacher(), 50)
+# 
+# class SimpleReacher(mujoco.ReacherEnv):
+#     def _step(self, a):
+#         ob, _, done, info = super()._step(a)
+#         return ob, info["reward_dist"], done, info
+# 
 # def reacher(short=False):
 #     env = mujoco.ReacherEnv()
 #     env = UseReward(env, reward_info_key="reward_dist")
