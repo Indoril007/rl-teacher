@@ -327,7 +327,7 @@ def main():
     if not args.no_videos:
         predictor = SegmentVideoRecorder(predictor, env, save_dir=osp.join('/tmp/rl_teacher_vids', run_name))
 
-    save_dir = './experiments/{}'.format(time())
+    save_dir = './experiments/{}_{}'.format(args.name, time())
     if osp.exists(save_dir):
         print("Warning: Log dir %s already exists! Storing info there anyway." % self.output_dir)
     else:
@@ -348,7 +348,7 @@ def main():
             timesteps_per_batch=1000,
             max_kl=0.001,
             seed=args.seed,
-            save_freq=2,
+            save_freq=50,
             save_dir=save_dir,
             load_dir=args.load_dir,
         )
