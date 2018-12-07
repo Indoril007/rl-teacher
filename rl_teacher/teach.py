@@ -208,6 +208,12 @@ class ComparisonRewardPredictor():
         self.agent_logger.log_simple(
             "labels/labeled_comparisons", len(self.comparison_collector.labeled_decisive_comparisons))
 
+    def save_session(self, path, global_step):
+        tf.train.Saver().save(self.sess, path, global_step)
+
+    def load_session(self, path):
+        tf.train.Saver().restore(self.sess, tf.train.latest_checkpoint(path))
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()

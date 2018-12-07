@@ -49,6 +49,7 @@ def train_parallel_trpo(
         multiprocess.set_start_method('spawn')
         os.environ['SET_PARALLEL_TRPO_START_METHOD'] = "1"
 
+
     run_indefinitely = (runtime <= 0)
 
     if max_timesteps_per_episode is None:
@@ -60,6 +61,8 @@ def train_parallel_trpo(
         discount_factor=discount_factor,
         cg_damping=cg_damping)
 
+    predictor.sess.run(tf.initializers.variables(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='policy')))
+
     if load_dir is not None:
 
         print("Loading Learner...")
@@ -69,6 +72,8 @@ def train_parallel_trpo(
             f.write(str(learner.get_policy()))
 
         print("Loading Predictor...")
+        fpath = os.path.join(load_dir, 'predictor')
+        learner.load_session(fpath)
 
     rollouts = ParallelRollout(env_id, make_env, predictor, workers, max_timesteps_per_episode, seed)
 
@@ -96,6 +101,8 @@ def train_parallel_trpo(
                 f.write(str(learner.get_policy()))
 
             # Saving predictor
+            fpath = os.path.join(save_dir, 'predictor/sess')
+            predictor.save_session(fpath, global_step=iteration)
 
         # output stats
         print("-------- Iteration %d ----------" % iteration)
