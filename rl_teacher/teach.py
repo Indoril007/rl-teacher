@@ -40,7 +40,8 @@ class TraditionalRLRewardPredictor(object):
         pass
 
     def save_session(self, path, global_step):
-        os.makedirs(path)
+        if not os.path.exist(path):
+            os.makedirs(path)
         with open(os.path.join(path, 'state.pkl'), 'wb') as f:
             pickle.dump([self.agent_logger.get_state(), global_step], f)
 
