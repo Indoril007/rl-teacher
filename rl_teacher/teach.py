@@ -40,7 +40,7 @@ class TraditionalRLRewardPredictor(object):
         pass
 
     def save_session(self, path, global_step):
-        if not os.path.exist(path):
+        if not os.path.exists(path):
             os.makedirs(path)
         with open(os.path.join(path, 'state.pkl'), 'wb') as f:
             pickle.dump([self.agent_logger.get_state(), global_step], f)
@@ -225,14 +225,15 @@ class ComparisonRewardPredictor():
 
     def save_session(self, path, global_step):
         tf.train.Saver().save(self.sess, os.path.join(path, 'sess'), global_step)
-        with open(os.path.join(path, 'state.pkl'), 'wb') as f:
-            pickle.dump([self.comparison_collector, self.agent_logger.get_state(), global_step], f)
+        self.comparison_collector.save(path, global_step)
+        self.agent_logger.save(path, global_step)
+        with open(os.path.join(path, 'iteration.pkl'), 'wb') as f:
+            pickle.dump(global_step, f)
 
     def load_session(self, path):
         tf.train.Saver().restore(self.sess, tf.train.latest_checkpoint(path))
-        with open(os.path.join(path, 'state.pkl'), 'rb') as f:
-            self.comparison_collector, logger_state, iteration = pickle.load(f)
-            self.agent_logger.load_state(logger_state)
+        with open(os.path.join(path, 'iteration.pkl'), 'rb') as f:
+            iteration = pickle.load(f)
         return iteration
 
 def main():
@@ -250,6 +251,7 @@ def main():
     parser.add_argument('-i', '--pretrain_iters', default=10000, type=int)
     parser.add_argument('-V', '--no_videos', action="store_true")
     parser.add_argument('-d', '--load_dir', default=None, type=str)
+    parser.add_argument('-g', '--load_step', default=None, type=int)
     args = parser.parse_args()
 
     print("Setting things up...")
@@ -265,7 +267,38 @@ def main():
 
     if args.predictor == "rl":
         predictor = TraditionalRLRewardPredictor(summary_writer)
-    else:
+    elif args.load_dir is not None:
+
+        with open(os.path.join(args.load_dir, 'agent_logger_state_{}.pkl'.format(args.load_step)), 'rb') as f:
+            logger_state = pickle.load(f)
+            agent_logger = AgentLogger(summary_writer, logger_state)
+
+        pretrain_labels = args.pretrain_labels if args.pretrain_labels else args.n_labels // 4
+
+        if args.n_labels:
+            label_schedule = LabelAnnealer(
+                agent_logger,
+                final_timesteps=num_timesteps,
+                final_labels=args.n_labels,
+                pretrain_labels=pretrain_labels)
+        else:
+            print("No label limit given. We will request one label every few seconds.")
+            label_schedule = ConstantLabelSchedule(pretrain_labels=pretrain_labels)
+
+        with open(os.path.join(args.load_dir, 'comparison_collector_{}.pkl'.format(args.load_step)), 'rb') as f:
+            comparison_collector = pickle.load(f)
+
+
+        predictor = ComparisonRewardPredictor(
+            env,
+            summary_writer,
+            comparison_collector=comparison_collector,
+            agent_logger=agent_logger,
+            label_schedule=label_schedule,
+        )
+
+
+    elif args.load_dir is None:
         agent_logger = AgentLogger(summary_writer)
 
         pretrain_labels = args.pretrain_labels if args.pretrain_labels else args.n_labels // 4
@@ -298,30 +331,29 @@ def main():
             label_schedule=label_schedule,
         )
 
-        if args.load_dir is None:
 
-            print("Starting random rollouts to generate pretraining segments. No learning will take place...")
-            pretrain_segments = segments_from_rand_rollout(
-                env_id, make_with_torque_removed, n_desired_segments=pretrain_labels * 2,
-                clip_length_in_seconds=CLIP_LENGTH, workers=args.workers)
-            for i in range(pretrain_labels):  # Turn our random segments into comparisons
-                comparison_collector.add_segment_pair(pretrain_segments[i], pretrain_segments[i + pretrain_labels])
+        print("Starting random rollouts to generate pretraining segments. No learning will take place...")
+        pretrain_segments = segments_from_rand_rollout(
+            env_id, make_with_torque_removed, n_desired_segments=pretrain_labels * 2,
+            clip_length_in_seconds=CLIP_LENGTH, workers=args.workers)
+        for i in range(pretrain_labels):  # Turn our random segments into comparisons
+            comparison_collector.add_segment_pair(pretrain_segments[i], pretrain_segments[i + pretrain_labels])
 
-            # Sleep until the human has labeled most of the pretraining comparisons
-            while len(comparison_collector.labeled_comparisons) < int(pretrain_labels * 0.75):
-                comparison_collector.label_unlabeled_comparisons()
-                if args.predictor == "synth":
-                    print("%s synthetic labels generated... " % (len(comparison_collector.labeled_comparisons)))
-                elif args.predictor == "human":
-                    print("%s/%s comparisons labeled. Please add labels w/ the human-feedback-api. Sleeping... " % (
-                        len(comparison_collector.labeled_comparisons), pretrain_labels))
-                    sleep(5)
+        # Sleep until the human has labeled most of the pretraining comparisons
+        while len(comparison_collector.labeled_comparisons) < int(pretrain_labels * 0.75):
+            comparison_collector.label_unlabeled_comparisons()
+            if args.predictor == "synth":
+                print("%s synthetic labels generated... " % (len(comparison_collector.labeled_comparisons)))
+            elif args.predictor == "human":
+                print("%s/%s comparisons labeled. Please add labels w/ the human-feedback-api. Sleeping... " % (
+                    len(comparison_collector.labeled_comparisons), pretrain_labels))
+                sleep(5)
 
-            # Start the actual training
-            for i in range(args.pretrain_iters):
-                predictor.train_predictor()  # Train on pretraining labels
-                if i % 100 == 0:
-                    print("%s/%s predictor pretraining iters... " % (i, args.pretrain_iters))
+        # Start the actual training
+        for i in range(args.pretrain_iters):
+            predictor.train_predictor()  # Train on pretraining labels
+            if i % 100 == 0:
+                print("%s/%s predictor pretraining iters... " % (i, args.pretrain_iters))
 
     # Wrap the predictor to capture videos every so often:
     if not args.no_videos:

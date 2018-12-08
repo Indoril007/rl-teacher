@@ -1,6 +1,8 @@
 from copy import deepcopy
+import os
 import os.path as osp
 from collections import deque
+import pickle
 
 import numpy as np
 import tensorflow as tf
@@ -27,15 +29,23 @@ def _pad_with_end_state(path, desired_length):
 class AgentLogger(object):
     """Tracks the performance of an arbitrary agent"""
 
-    def __init__(self, summary_writer, timesteps_per_summary=int(1e3)):
-        self.summary_step = 0
-        self.timesteps_per_summary = timesteps_per_summary
+    def __init__(self, summary_writer, timesteps_per_summary=int(1e3), load_state=None):
+        if load_state is not None:
+            self.summary_step, \
+            self.timesteps_per_summary, \
+            self._timesteps_elapsed, \
+            self._timesteps_since_last_training, \
+            self.last_n_paths = load_state
+        else:
+            self.summary_step = 0
+            self.timesteps_per_summary = timesteps_per_summary
 
-        self._timesteps_elapsed = 0
-        self._timesteps_since_last_training = 0
+            self._timesteps_elapsed = 0
+            self._timesteps_since_last_training = 0
 
-        n = 100
-        self.last_n_paths = deque(maxlen=n)
+            n = 100
+            self.last_n_paths = deque(maxlen=n)
+
         self.summary_writer = summary_writer
 
     def get_recent_paths_with_padding(self):
@@ -85,3 +95,7 @@ class AgentLogger(object):
         self._timesteps_elapsed,    \
         self._timesteps_since_last_training,    \
         self.last_n_paths = state
+
+    def save(self, path, global_step):
+        with open(os.path.join(path, 'agent_logger_state_{}.pkl'.format(global_step)), 'wb') as f:
+            pickle.dump(self.get_state(), f)

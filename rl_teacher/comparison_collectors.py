@@ -2,6 +2,7 @@ import multiprocessing
 import os
 import os.path as osp
 import uuid
+import pickle
 
 import numpy as np
 
@@ -48,6 +49,10 @@ class SyntheticComparisonCollector(object):
 
         # Mutate the comparison and give it the new label
         comparison['label'] = 0 if left_has_more_rew else 1
+
+    def save(self, path, global_step):
+        with open(os.path.join(path, 'comparison_collector_{}.pkl'.format(global_step)), 'wb') as f:
+            pickle.dump(self, f)
 
 def _write_and_upload_video(env_id, gcs_path, local_path, segment):
     env = make_with_torque_removed(env_id)
