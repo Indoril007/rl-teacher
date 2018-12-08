@@ -175,8 +175,9 @@ class TRPO(object):
         return stats, time() - start_time
 
     def save_session(self, path, global_step):
-        tf.train.Saver().save(self.session, os.path.join(path, 'sess'), global_step)
+        tf.train.Saver().save(self.session, os.path.join(path, 'learner', 'sess'), global_step)
 
     def load_session(self, path):
+        path = os.path.join(path, 'learner')
         tf.train.Saver().restore(self.session, tf.train.latest_checkpoint(path))
 

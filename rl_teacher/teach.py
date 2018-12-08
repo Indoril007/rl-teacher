@@ -27,8 +27,8 @@ CLIP_LENGTH = 1.5
 class TraditionalRLRewardPredictor(object):
     """Predictor that always returns the true reward provided by the environment."""
 
-    def __init__(self, summary_writer):
-        self.agent_logger = AgentLogger(summary_writer)
+    def __init__(self, summary_writer, agent_logger=None):
+        self.agent_logger = AgentLogger(summary_writer) if agent_logger is None else agent_logger
         self.sess = None
         self.comparison_collector = None
 
@@ -40,16 +40,13 @@ class TraditionalRLRewardPredictor(object):
         pass
 
     def save_session(self, path, global_step):
-        if not os.path.exists(path):
-            os.makedirs(path)
-        with open(os.path.join(path, 'state.pkl'), 'wb') as f:
-            pickle.dump([self.agent_logger.get_state(), global_step], f)
+        self.agent_logger.save(path, global_step)
+        with open(os.path.join(path, 'iteration.pkl'), 'wb') as f:
+            pickle.dump(global_step, f)
 
     def load_session(self, path):
-        with open(os.path.join(path, 'state.pkl'), 'rb') as f:
-            logger_state, iteration = pickle.load(f)
-            self.agent_logger.load_state(logger_state)
-        return iteration
+        pass
+
 
 class ComparisonRewardPredictor():
     """Predictor that trains a model to predict how much reward is contained in a trajectory segment"""
@@ -224,23 +221,22 @@ class ComparisonRewardPredictor():
             "labels/labeled_comparisons", len(self.comparison_collector.labeled_decisive_comparisons))
 
     def save_session(self, path, global_step):
-        tf.train.Saver().save(self.sess, os.path.join(path, 'sess'), global_step)
         self.comparison_collector.save(path, global_step)
         self.agent_logger.save(path, global_step)
         with open(os.path.join(path, 'iteration.pkl'), 'wb') as f:
             pickle.dump(global_step, f)
 
+        tf.train.Saver().save(self.sess, os.path.join(path, 'predictor', 'sess'), global_step)
+
     def load_session(self, path):
+        path = os.path.join(path, 'predictor')
         tf.train.Saver().restore(self.sess, tf.train.latest_checkpoint(path))
-        with open(os.path.join(path, 'iteration.pkl'), 'rb') as f:
-            iteration = pickle.load(f)
-        return iteration
 
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('-e', '--env_id', required=True)
-    parser.add_argument('-p', '--predictor', required=True)
+    parser.add_argument('-e', '--env_id', required=False)
+    parser.add_argument('-p', '--predictor', required=False)
     parser.add_argument('-n', '--name', required=True)
     parser.add_argument('-s', '--seed', default=1, type=int)
     parser.add_argument('-w', '--workers', default=4, type=int)
@@ -250,9 +246,26 @@ def main():
     parser.add_argument('-a', '--agent', default="parallel_trpo", type=str)
     parser.add_argument('-i', '--pretrain_iters', default=10000, type=int)
     parser.add_argument('-V', '--no_videos', action="store_true")
-    parser.add_argument('-d', '--load_dir', default=None, type=str)
-    parser.add_argument('-g', '--load_step', default=None, type=int)
     args = parser.parse_args()
+
+    save_dir = './experiments/{}'.format(args.name)
+    if osp.exists(save_dir):
+        print("=== Experiment found, picking up where you left off ===")
+        load = True
+        with open(os.path.join(save_dir, 'args.pkl'), 'rb') as f:
+            args = pickle.load(f)
+        with open(os.path.join(save_dir, 'iteration.pkl'), 'rb') as f:
+            iteration = pickle.load(f)
+
+        print("=== Loaded Arguments ===")
+        print(args)
+        print("At Iteration: {}".format(iteration))
+    else:
+        load = False
+        iteration = 0
+        os.makedirs(save_dir)
+        with open(os.path.join(save_dir, 'args.pkl'), 'wb') as f:
+            pickle.dump(args, f)
 
     print("Setting things up...")
 
@@ -265,13 +278,20 @@ def main():
     num_timesteps = int(args.num_timesteps)
     experiment_name = slugify(args.name)
 
-    if args.predictor == "rl":
-        predictor = TraditionalRLRewardPredictor(summary_writer)
-    elif args.load_dir is not None:
-
-        with open(os.path.join(args.load_dir, 'agent_logger_state_{}.pkl'.format(args.load_step)), 'rb') as f:
+    if args.predictor == "rl" and load:
+        with open(os.path.join(save_dir, 'agent_logger_state_{}.pkl'.format(iteration)), 'rb') as f:
             logger_state = pickle.load(f)
-            agent_logger = AgentLogger(summary_writer, logger_state)
+            agent_logger = AgentLogger(summary_writer, load_state=logger_state)
+        predictor = TraditionalRLRewardPredictor(summary_writer, agent_logger)
+
+    elif args.predictor == "rl" and not load:
+        predictor = TraditionalRLRewardPredictor(summary_writer)
+
+    elif load:
+
+        with open(os.path.join(save_dir, 'agent_logger_state_{}.pkl'.format(iteration)), 'rb') as f:
+            logger_state = pickle.load(f)
+            agent_logger = AgentLogger(summary_writer, load_state=logger_state)
 
         pretrain_labels = args.pretrain_labels if args.pretrain_labels else args.n_labels // 4
 
@@ -285,7 +305,7 @@ def main():
             print("No label limit given. We will request one label every few seconds.")
             label_schedule = ConstantLabelSchedule(pretrain_labels=pretrain_labels)
 
-        with open(os.path.join(args.load_dir, 'comparison_collector_{}.pkl'.format(args.load_step)), 'rb') as f:
+        with open(os.path.join(save_dir, 'comparison_collector_{}.pkl'.format(iteration)), 'rb') as f:
             comparison_collector = pickle.load(f)
 
 
@@ -298,7 +318,7 @@ def main():
         )
 
 
-    elif args.load_dir is None:
+    elif not load:
         agent_logger = AgentLogger(summary_writer)
 
         pretrain_labels = args.pretrain_labels if args.pretrain_labels else args.n_labels // 4
@@ -359,13 +379,7 @@ def main():
     if not args.no_videos:
         predictor = SegmentVideoRecorder(predictor, env, save_dir=osp.join('/tmp/rl_teacher_vids', run_name))
 
-    save_dir = './experiments/{}_{}'.format(args.name, time())
-    if osp.exists(save_dir):
-        print("Warning: Log dir %s already exists! Storing info there anyway." % self.output_dir)
-    else:
-        os.makedirs(save_dir)
-
-    # We use a vanilla agent from openai/baselines that contains a single change that blinds it to the true reward
+   # We use a vanilla agent from openai/baselines that contains a single change that blinds it to the true reward
     # The single changed section is in `rl_teacher/agent/trpo/core.py`
     print("Starting joint training of predictor and agent")
     if args.agent == "parallel_trpo":
@@ -380,9 +394,10 @@ def main():
             timesteps_per_batch=1000,
             max_kl=0.001,
             seed=args.seed,
-            save_freq=50,
+            save_freq=5,
             save_dir=save_dir,
-            load_dir=args.load_dir,
+            load=load,
+            iteration=iteration,
         )
     elif args.agent == "pposgd_mpi":
         def make_env():

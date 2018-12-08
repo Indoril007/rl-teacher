@@ -40,7 +40,8 @@ def train_parallel_trpo(
         cg_damping=0.1,
         save_freq=100,
         save_dir=None,
-        load_dir=None,
+        load=False,
+        iteration=0,
 ):
     # Tensorflow is not fork-safe, so we must use spawn instead
     # https://github.com/tensorflow/tensorflow/issues/5448#issuecomment-258934405
@@ -64,19 +65,14 @@ def train_parallel_trpo(
     if predictor.sess:
         predictor.sess.run(tf.initializers.variables(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='policy')))
 
-    iteration = 0
-
-    if load_dir is not None:
-
+    if load:
         print("Loading Learner...")
-        fpath = os.path.join(load_dir, 'learner')
-        learner.load_session(fpath)
-        with open(os.path.join(fpath,'loaded_weights.txt'), 'w+') as f:
+        learner.load_session(save_dir)
+        with open(os.path.join(save_dir,'loaded_weights.txt'), 'w+') as f:
             f.write(str(learner.get_policy()))
 
         print("Loading Predictor...")
-        fpath = os.path.join(load_dir, 'predictor')
-        iteration = predictor.load_session(fpath)
+        predictor.load_session(save_dir)
 
 
     rollouts = ParallelRollout(env_id, make_env, predictor, workers, max_timesteps_per_episode, seed)
@@ -99,13 +95,12 @@ def train_parallel_trpo(
         if iteration % save_freq == 0:
             # Saving learner
             fpath = os.path.join(save_dir, 'learner')
-            learner.save_session(fpath, global_step=iteration)
+            learner.save_session(save_dir, global_step=iteration)
             with open(fpath + '_saved_weights_{}.txt'.format(iteration), 'w+') as f:
                 f.write(str(learner.get_policy()))
 
             # Saving predictor
-            fpath = os.path.join(save_dir, 'predictor')
-            predictor.save_session(fpath, global_step=iteration)
+            predictor.save_session(save_dir, global_step=iteration)
 
         # output stats
         print("-------- Iteration %d ----------" % iteration)
