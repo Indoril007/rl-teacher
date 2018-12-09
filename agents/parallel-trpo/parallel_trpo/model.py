@@ -79,30 +79,49 @@ class TRPO(object):
         # self.vf = VF(self.session)
         self.vf = LinearVF()
 
-    # the actual parameter values
-    def _get_flat_params(self):
-        op = tf.concat(axis=0, values=[tf.reshape(v, [tf.size(v)]) for v in self.policy_vars])
-        return op.eval(session=self.session)
+        # Operations
+        # _get_flat_params
+        self._get_flat_params = tf.concat(axis=0, values=[tf.reshape(v, [tf.size(v)]) for v in self.policy_vars])
 
-    # call this to set parameter values
-    # TODO: CLEANUP!!!
-    def _set_from_flat(self, theta):
-        assigns = []
+        # _set_from_flat
         total_size = sum(np.prod(v.get_shape().as_list()) for v in self.policy_vars)
-        theta_op = tf.placeholder(tf.float32, [total_size])
+        self._theta_op = tf.placeholder(tf.float32, [total_size])
         start = 0
         assigns = []
         for var in self.policy_vars:
             size = tf.size(var)
-            assigns.append(tf.assign(var, tf.reshape(theta_op[start:start + size], var.shape)))
+            assigns.append(tf.assign(var, tf.reshape(self._theta_op[start:start + size], var.shape)))
             start += size
-        op = tf.group(*assigns)
-        self.session.run(op, feed_dict={theta_op: theta})
+        self._set_from_flat = tf.group(*assigns)
+
+        # get_policy
+        self.get_policy = [var for var in self.policy_vars if 'policy' in var.name]
+
+
+    # the actual parameter values
+    # def _get_flat_params(self):
+    #     op = tf.concat(axis=0, values=[tf.reshape(v, [tf.size(v)]) for v in self.policy_vars])
+    #     return op.eval(session=self.session)
+
+    # call this to set parameter values
+    # TODO: CLEANUP!!!
+    # def _set_from_flat(self, theta):
+    #     assigns = []
+    #     total_size = sum(np.prod(v.get_shape().as_list()) for v in self.policy_vars)
+    #     theta_op = tf.placeholder(tf.float32, [total_size])
+    #     start = 0
+    #     assigns = []
+    #     for var in self.policy_vars:
+    #         size = tf.size(var)
+    #         assigns.append(tf.assign(var, tf.reshape(theta_op[start:start + size], var.shape)))
+    #         start += size
+    #     op = tf.group(*assigns)
+    #     self.session.run(op, feed_dict={theta_op: theta})
 
     # TODO: This is poorly done
-    def get_policy(self):
-        op = [var for var in self.policy_vars if 'policy' in var.name]
-        return self.session.run(op)
+    # def get_policy(self):
+    #     op = [var for var in self.policy_vars if 'policy' in var.name]
+    #     return self.session.run(op)
 
     def learn(self, paths):
         start_time = time()
@@ -132,7 +151,7 @@ class TRPO(object):
             self.old_avg_action_dist: avg_action_dist, self.old_logstd_action_dist: logstd_action_dist}
 
         # parameters
-        old_theta = self._get_flat_params()
+        old_theta = self._get_flat_params.eval(session=self.session)
 
         g = self.session.run(self.policy_gradient, feed_dict)
 
@@ -159,7 +178,7 @@ class TRPO(object):
 
         fullstep = stepdir / lm
 
-        self._set_from_flat(old_theta + fullstep)
+        self.session.run(self._set_from_flat, feed_dict={self._theta_op: old_theta+fullstep})
 
         surrogate_after, kl_after, entropy_after = self.session.run(self.losses, feed_dict)
 

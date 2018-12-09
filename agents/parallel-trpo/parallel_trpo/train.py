@@ -68,8 +68,8 @@ def train_parallel_trpo(
     if load:
         print("Loading Learner...")
         learner.load_session(save_dir)
-        with open(os.path.join(save_dir,'loaded_weights.txt'), 'w+') as f:
-            f.write(str(learner.get_policy()))
+        # with open(os.path.join(save_dir,'loaded_weights.txt'), 'w+') as f:
+        #     f.write(str(learner.get_policy()))
 
         print("Loading Predictor...")
         predictor.load_session(save_dir)
@@ -83,7 +83,8 @@ def train_parallel_trpo(
         iteration += 1
 
         # update the weights
-        weights = learner.get_policy()
+        weights = learner.session.run(learner.get_policy)
+        #weights = learner.get_policy()
         rollouts.set_policy_weights(weights)
 
         # run a bunch of async processes that collect rollouts
@@ -96,11 +97,14 @@ def train_parallel_trpo(
             # Saving learner
             fpath = os.path.join(save_dir, 'learner')
             learner.save_session(save_dir, global_step=iteration)
-            with open(fpath + '_saved_weights_{}.txt'.format(iteration), 'w+') as f:
-                f.write(str(learner.get_policy()))
+            #op with open(fpath + '_saved_weights_{}.txt'.format(iteration), 'w+') as f:
+            #     f.write(str(learner.get_policy()))
 
             # Saving predictor
             predictor.save_session(save_dir, global_step=iteration)
+
+            tf.summary.FileWriter(os.path.join(save_dir, 'learner_graph'), learner.session.graph)
+            #tf.summary.FileWriter(os.path.join(save_dir, 'predictor_graph'), predictor.sess.graph)
 
         # output stats
         print("-------- Iteration %d ----------" % iteration)
